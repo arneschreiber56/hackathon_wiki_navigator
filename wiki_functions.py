@@ -1,5 +1,11 @@
 import wikipedia
+
 WIKI_INPUT = "Olympische Spiele"
+wikipedia.set_lang("de")
+
+def is_wiki_content_found(topic):
+    pass
+
 
 def get_wiki_content(topic):
     """
@@ -18,27 +24,27 @@ def get_wiki_content(topic):
         The full article content as a string if the page exists.
         Returns None if the topic is ambiguous or the page cannot be found.
     """
-    wikipedia.set_lang("de")
     try:
         wiki_full = wikipedia.page(topic)
-        return wiki_full.content
+        return "Full_content_ok", wiki_full.content
         # print(wiki_full.url)
     except wikipedia.DisambiguationError:
         wiki_search = wikipedia.search(topic, results=5)
-        print("Achtung! DisambiguationError! Meintest Du:")
-        print(wiki_search)
+        #print("Achtung! DisambiguationError! Meintest Du:")
+        return "DisambiguationError", wiki_search
     except wikipedia.PageError:
         wiki_search = wikipedia.search(topic, results=5)
-        print("Achtung! PageError!")
-        if not wiki_search:
-            print("Nichts gefunden: Versuche erneut!")
-            #continue
-        else:
-            print(wiki_search)
+        return "PageError", wiki_search
 
-
-    
-get_wiki_content(WIKI_INPUT)
-
-
+def get_wiki_url(topic):
+    try:
+        wiki_full = wikipedia.page(topic)
+        return "Full_content_ok", wiki_full.content, wiki_full.url
+    except wikipedia.DisambiguationError:
+        wiki_search = wikipedia.search(topic, results=5)
+        #print("Achtung! DisambiguationError! Meintest Du:")
+        return "DisambiguationError", None, wiki_search
+    except wikipedia.PageError:
+        wiki_search = wikipedia.search(topic, results=5)
+        return "PageError", None,  wiki_search
 
