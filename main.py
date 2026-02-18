@@ -2,8 +2,14 @@ import textwrap  # Zum Formatieren von Text auf eine bestimmte Breite
 from colorama import init, Fore, Style  # Für farbige Terminal-Ausgabe
 import openai_api  # Eigene Datei, die die OpenAI API ansteuert
 import wiki_functions  # Eigene Datei, um Wikipedia-Artikel abzurufen
+import warnings
 
-# Colorama initialisieren (wichtig für Windows, damit Farben korrekt angezeigt werden)
+# Hiermit sagen wir Python: "Bitte ignoriere alle Warnungen an User"
+warnings.filterwarnings("ignore", category=UserWarning, module="wikipedia")
+
+# Hier kommt dann dein restlicher Code, z.B.:
+import wikipedia
+# ...# Colorama initialisieren (wichtig für Windows, damit Farben korrekt angezeigt werden)
 init(autoreset=True)
 
 # Definieren, wie breit die Ausgabe im Terminal maximal sein soll
@@ -19,96 +25,62 @@ def show_welcome():
 
 def show_menu():
     """Zeigt das Hauptmenü mit Auswahlmöglichkeiten"""
+
     print(Fore.YELLOW + "\nBitte wähle eine Option:")
     print(Fore.YELLOW + "1. Artikel suchen")
     print(Fore.YELLOW + "2. Ende des Programms")
 
 
-def run_quiz(quiz_text: str):
+def run_quiz(quiz_data):
     """
-    Führt das Quiz interaktiv im Terminal aus.
-
-    Ablauf:
-    1. Trennt die richtigen Antworten (Answer:) vom sichtbaren Text.
-    2. Zeigt dem Nutzer nur die Fragen + Antwortmöglichkeiten.
-    3. Fragt die Antworten einzeln ab.
-    4. Vergleicht mit den richtigen Lösungen.
-    5. Berechnet Score und Prozentzahl.
+    Führt ein Quiz aus, das als JSON-Liste vorliegt.
     """
 
-    # Falls OpenAI einen Fehler zurückgegeben hat
-    if quiz_text.startswith("Quiz konnte nicht erstellt werden"):
-        print(Fore.RED + quiz_text)
+    if not quiz_data:
+        print(Fore.RED + "Quiz konnte nicht geladen werden.")
         return
 
-    # Text in einzelne Zeilen zerlegen
-    lines = quiz_text.splitlines()
-
-    correct_answers = []  # Speichert richtige Antworten (A/B/C/D)
-    visible_lines = []    # Speichert nur die sichtbaren Quiz-Zeilen
-
-    # Jede Zeile analysieren
-    for line in lines:
-        stripped = line.strip()
-
-        # Wenn es eine Lösungszeile ist → merken, aber nicht anzeigen
-        if stripped.startswith("Answer:"):
-            correct_answers.append(stripped.replace("Answer:", "").strip().upper())
-        else:
-            visible_lines.append(line)
-
-    # Falls keine Antworten erkannt wurden (Formatfehler)
-    if not correct_answers:
-        print(Fore.RED + "\nKonnte die Antworten nicht lesen (Format stimmt nicht).")
-        return
-
-    # Überschrift anzeigen
     print(Fore.CYAN + "\n" + "=" * TERMINAL_WIDTH)
     print(Style.BRIGHT + Fore.CYAN + "QUIZ".center(TERMINAL_WIDTH))
     print(Fore.CYAN + "=" * TERMINAL_WIDTH + "\n")
 
-    # Quiz ohne Lösungen anzeigen
-    print(Fore.WHITE + "\n".join(visible_lines))
-    print(Fore.YELLOW + "\nBitte beantworte die Fragen (A/B/C/D).")
-
     score = 0
-    total = len(correct_answers)
-    valid = ["A", "B", "C", "D"]
+    letters = ["A", "B", "C", "D"]
 
-    # Jede Frage einzeln abfragen
-    for i in range(total):
+    """
+    Durchläuft jede Frage im Quiz.
+    enumerate(..., 1) sorgt dafür, dass die Fragennummer bei 1 beginnt.
+    """
+
+    for i, question in enumerate(quiz_data, 1):
+        print(Fore.YELLOW + f"Frage {i}: {question['question']}")
+
+        for index, option in enumerate(question["options"]):
+            print(Fore.WHITE + f"{letters[index]}) {option}")
+
         while True:
-            user_answer = input(Fore.GREEN + f"Deine Antwort für F{i+1}: ").strip().upper()
-
-            # Prüfen, ob Eingabe gültig ist
-            if user_answer in valid:
+            user_answer = input(Fore.GREEN + "Deine Antwort (A/B/C/D): ").strip().upper()
+            if user_answer in letters:
                 break
+            print(Fore.RED + "Bitte A, B, C oder D eingeben.")
 
-            print(Fore.RED + "Bitte nur A, B, C oder D eingeben.")
-
-        # Antwort vergleichen
-        if user_answer == correct_answers[i]:
+        if user_answer == question["correct"]:
+            print(Fore.GREEN + "✅ Richtig!\n")
             score += 1
+        else:
+            correct_letter = question["correct"]
+            correct_index = letters.index(correct_letter)
+            correct_text = question["options"][correct_index]
+            print(Fore.RED + f"❌ Falsch! Richtig wäre: {correct_letter}) {correct_text}\n")
 
-    # Prozentwert berechnen
-    percent = round((score / total) * 100)
+    percent = round((score / len(quiz_data)) * 100)
 
-    # Ergebnis anzeigen
-    print(Fore.CYAN + "\n" + "=" * TERMINAL_WIDTH)
+    print(Fore.CYAN + "=" * TERMINAL_WIDTH)
     print(Style.BRIGHT + Fore.CYAN + "ERGEBNIS".center(TERMINAL_WIDTH))
     print(Fore.CYAN + "=" * TERMINAL_WIDTH)
+    print(Fore.WHITE + f"Du hast {score}/{len(quiz_data)} richtig ({percent}%).")
 
-    print(Fore.WHITE + f"Richtig: {score}/{total} ({percent}%)")
-
-    # Feedback je nach Leistung
-    if percent >= 80:
-        print(Fore.GREEN + "✅ Sehr gut! Das sieht nach gutem Verständnis aus.")
-    elif percent >= 50:
-        print(Fore.YELLOW + "👍 Ganz okay! Du hast einiges verstanden.")
-    else:
-        print(Fore.RED + "💡 Vielleicht nochmal kurz die Zusammenfassung lesen.")
-
-    input("\nPress Enter to return to menu...")
+    input("\nEnter drücken für Menü...")
 
 
 def handle_search():
@@ -116,13 +88,17 @@ def handle_search():
     Fragt den Nutzer nach einem Thema, ruft den Wikipedia-Artikel ab,
     erstellt eine Zusammenfassung mit OpenAI und zeigt die URL an.
     """
+    # Hier müssen Leerstring abfangen
     topic = input(Fore.GREEN + "\nGebe ein Thema ein: ")
+    if not topic:
+        print(Fore.RED + "Bitte drücken Sie nicht nur Enter!")
+        return
     print(Fore.BLUE + f"\nWikipedia sucht nach '{topic}'...\n")
 
     # Holt den Status, den Text und die URL des Artikels
-    error_marker, article_text, article_url = wiki_functions.get_wiki_url(topic)
-
-    if error_marker == "Full_content_ok" and article_text:
+    article_text, search_lst = wiki_functions.get_wiki_content(topic)
+    article_url = wiki_functions.get_wiki_url(topic)
+    if article_text:
         print(Fore.MAGENTA + "Zusammenfassung des Artikels...\n")
 
         # Die KI fasst den Text zusammen
@@ -141,21 +117,21 @@ def handle_search():
 
         # Link zum vollständigen Wikipedia-Artikel anzeigen
         print(Fore.YELLOW + "\nDen kompletten Artikel findest du hier:")
-        print(Fore.BLUE + article_url)
+        print(Fore.BLUE + article_url[0])
         print()
 
-        #Babar
         # --- QUIZ (optional) ---
         make_quiz = input(Fore.YELLOW + "Möchtest du ein kurzes Quiz? (j/n): ").strip().lower()
         if make_quiz == "j":
-            quiz_text = openai_api.quiz_from_summary(summary, num_questions=3)
-            run_quiz(quiz_text)
+            quiz_data = openai_api.quiz_from_summary(summary, num_questions=3)
+            run_quiz(quiz_data)
 
-
+    elif not search_lst:
+        print(Fore.RED + "Keine Einträge gefunden, bitte versuchen Sie eine andere Eingabe!")
 
     else:
         # Fehlerfall: Kein eindeutiger Artikel gefunden
-        print(Fore.RED + "Kein eindeutiger Artikel gefunden. Suchergebnisse: " + str(article_url))
+        print(Fore.RED + "Kein eindeutiger Artikel gefunden. Suchergebnisse: " + ", ".join(map(str, search_lst)))
 
 
 

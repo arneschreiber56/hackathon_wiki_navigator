@@ -1,3 +1,5 @@
+import json
+
 # Ermöglicht das Laden von Umgebungsvariablen aus einer .env-Datei
 from dotenv import load_dotenv
 
@@ -50,47 +52,37 @@ def summarize(text):
         return f"Entschuldigung, die KI ist aktuell nicht verfügbar. Fehler: {e}"
 
 
-def quiz_from_summary(summary: str, num_questions: int = 3) -> str:
+def quiz_from_summary(summary: str, num_questions: int = 3):
     """
-    Erstellt aus der Zusammenfassung ein Multiple-Choice-Quiz.
-
-    Parameter:
-    - summary: Die vorher erstellte Zusammenfassung
-    - num_questions: Anzahl der Fragen (wird auf 2–3 begrenzt)
-
-    Rückgabe:
-    - Ein formatierter Text im festen Layout mit:
-      F1:
-      A)
-      B)
-      C)
-      D)
-      Answer: A
+    Erstellt ein Quiz im JSON-Format.
+    Rückgabe: Liste von Fragen (Python-Objekte)
     """
 
-    # Sicherstellen, dass es nur 2 oder 3 Fragen sind
+    # Nur 2–3 Fragen erlauben
     num_questions = 2 if num_questions < 2 else (3 if num_questions > 3 else num_questions)
 
-    # Prompt, der exakt vorgibt, wie das Quiz aussehen soll
     prompt = f"""
-Erstellen Sie aus dieser Zusammenfassung genau {num_questions} Multiple-Choice-Fragen.
-Das Format muss exakt wie folgt aussehen:
+Erstelle genau {num_questions} Multiple-Choice-Fragen basierend auf der Summary.
 
-F1: question text
-A) option
-B) option
-C) option
-D) option
-Answer: A
+Antworte ausschließlich im gültigen JSON-Format:
 
-Rules:
-- Nutze ausschließlich A, B, C oder D für die Antwort
-- Die Fragen dürfen sich NUR auf die Summary beziehen
+[
+  {{
+    "question": "Frage hier",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correct": "A"
+  }}
+]
+
+Regeln:
 - Sprache: Deutsch
+- correct darf nur A, B, C oder D sein
+- Keine zusätzliche Erklärung außerhalb des JSON
+- Nur auf die Summary beziehen
 
 SUMMARY:
 {summary[:2000]}
-""".strip()
+"""
 
     try:
         response = client.chat.completions.create(
@@ -98,7 +90,7 @@ SUMMARY:
             messages=[
                 {
                     "role": "system",
-                    "content": "Sie erstellen kurze Quizze im exakt gewünschten Format."
+                    "content": "Du antwortest nur im gültigen JSON-Format."
                 },
                 {
                     "role": "user",
@@ -107,8 +99,11 @@ SUMMARY:
             ]
         )
 
-        # Das komplette Quiz wird als Text zurückgegeben
-        return response.choices[0].message.content.strip()
+        quiz_text = response.choices[0].message.content.strip()
+
+        # JSON-Text in Python-Liste umwandeln
+        return json.loads(quiz_text)
 
     except Exception as e:
-        return f"Quiz konnte nicht erstellt werden. Fehler: {e}"
+        print(f"Quiz konnte nicht erstellt werden: {e}")
+        return None
